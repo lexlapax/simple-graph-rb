@@ -5,5 +5,5 @@ gem 'sqlite3'
 gem 'json'
 gem 'minitest'
 gem 'graphviz'
-gem 'rake'
+
 

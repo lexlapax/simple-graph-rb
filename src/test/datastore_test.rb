@@ -27,6 +27,14 @@ def sqlite_query dbfile, query
     end
     return nil
 end
+
+class NodeTest < MiniTest::Test
+    def simplenode
+        assert_equal(nil, Node.new().id)
+        assert_equal(1, Node.from_json(APPLE).id)
+    end
+end
+
 class DatastoreTest < Minitest::Test
     def setup
         @db_file = "graph_test.db"
@@ -39,38 +47,58 @@ class DatastoreTest < Minitest::Test
         assert_path_exists(@db_file)# File.stat(@db_file).writable? 
     end
     
-    def test_addNode
-        @db.add_node(APPLE,id: 1)
+    def test_initialize_crud_search
+        #add_node
+        @db.add_node(APPLE, 1)
         results = sqlite_query(@db_file, 'SELECT * from nodes where id = "1"')
-        assert_equal 1, results.count, "added 1 node expected 1 in return"
-        assert_equal "Apple Computer Company", JSON.parse(results[0]["body"])["name"], "got this as results #{results}"
+        assert_equal(1, results.count, "added 1 node expected 1 in return")
+        assert_equal("Apple Computer Company", JSON.parse(results[0]["body"])["name"], "got this as results #{results}")
 
-        @db.add_node(WOZ, id:2)
+        @db.add_node(WOZ, 2)
         results = sqlite_query(@db_file, 'SELECT * from nodes')
-        assert_equal 2, results.count, "added 1 node expected 2 in return"
+        assert_equal(2, results.count, "added 1 node expected 2 in return")
         res = JSON.parse(results[1]["body"])
-        assert_equal "2", res["id"], "id should be 2"
-        assert_equal "Steve Wozniak", res["name"], "name does not match"
+        assert_equal("2", res["id"], "id should be 2")
+        assert_equal("Steve Wozniak", res["name"], "name does not match")
 
-        @db.add_node(JOBS,id: 3)
+        @db.add_node(JOBS, 3)
         results = sqlite_query(@db_file, 'SELECT * from nodes')
-        assert_equal 3, results.count, "added 1 node expected 3 in return"
+        assert_equal(3, results.count, "added 1 node expected 3 in return")
 
-        @db.add_node(WAYNE, id: 4)
+        @db.add_node(WAYNE, 4)
         results = sqlite_query(@db_file, 'SELECT * from nodes')
-        assert_equal 4, results.count, "added 1 node expected 4 in return"
+        assert_equal(4, results.count, "added 1 node expected 4 in return")
 
-        @db.add_node(MARKKULA,id: 5)
+        @db.add_node(MARKKULA, 5)
         results = sqlite_query(@db_file, 'SELECT * from nodes')
-        assert_equal 5, results.count, "added 1 node expected 5 in return"
-        res = JSON.parse(results[4]["body"])
-        assert_equal "5", res["id"], "id should be 5"
-        assert_equal "Mike Markkula", res["name"], "name does not match"
+        assert_equal(5, results.count, "added 1 node expected 5 in return")
+        results = JSON.parse(results[4]["body"])
+        assert_equal("5", results["id"], "id should be 5")
+        assert_equal("Mike Markkula", results["name"], "name does not match")
 
         assert_raises(Exception, "this should have raised exception") {  @db.add_node(APPLE) }
         
+        #find_node
+        results = @db.find_node(3)
+        assert_equal("Steve Jobs", results["name"])
+
+        #find_node
+        results = @db.find_node(6)
+        assert_equal({}, results)
+
+        #find_nodes
+
+        #upsert node
+        @db.upsert_node(APPLE, 1)
+        results = @db.find_node(1)
+        assert_equal(results,JSON.parse(APPLE))
+
+        puts @db.upsert_node(WOZ_NICK, 2)
+        results = @db.find_node(2)
+        assert_equal(results, JSON.parse(WOZ_NICK))
+
     end
-    # def test_flunk
-    #     flunk "You shall not pass"
-    # end
+#     # def test_flunk
+#     #     flunk "You shall not pass"
+#     # end
 end

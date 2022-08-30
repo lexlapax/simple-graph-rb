@@ -36,18 +36,29 @@ class NodeTest < MiniTest::Test
 end
 
 class DatastoreTest < Minitest::Test
-    def setup
-        @db_file = "graph_test.db"
+    @@setup_complete = false
+    @@tests_run = 0
+    @db = nil
+    def setup(db_file="graph_test.db")
+        @db_file = db_file
+        @@tests_run+=1
         @db = Datastore.new(@db_file)
+        if(!@@setup_complete)
+            @@setup_complete = true
+        end
     end
     def teardown
         File.delete @db_file
+        # if @@tests_run == DatastoreTest.runnable_methods.length 
+        #     File.delete @db_file
+        #     puts "ran #{@@tests_run} tests for #{self.class}"
+        # end
     end
     def test_sqldbfile
         assert_path_exists(@db_file)# File.stat(@db_file).writable? 
     end
     
-    def test_initialize_crud_search
+    def test_initialize_crud
         #add_node
         @db.add_node(APPLE, 1)
         results = sqlite_query(@db_file, 'SELECT * from nodes where id = "1"')
@@ -80,24 +91,63 @@ class DatastoreTest < Minitest::Test
         
         #find_node
         results = @db.find_node(3)
-        assert_equal("Steve Jobs", results["name"])
+        # puts results
+        assert_equal("Steve Jobs", results.body["name"])
+
 
         #find_node
         results = @db.find_node(6)
         assert_equal({}, results)
 
-        #find_nodes
-
         #upsert node
         @db.upsert_node(APPLE, 1)
         results = @db.find_node(1)
-        assert_equal(results,JSON.parse(APPLE))
+        assert_equal(results.body,JSON.parse(APPLE))
 
-        puts @db.upsert_node(WOZ_NICK, 2)
+        # puts @db.find_node(2)
+        @db.upsert_node(WOZ_NICK, 2)
         results = @db.find_node(2)
-        assert_equal(results, JSON.parse(WOZ_NICK))
+        assert_equal(results.body, JSON.parse(WOZ_NICK))
 
-    end
+        #find_nodes
+        results = @db.find_nodes({'name': 'Steve'}, :search_cond_like, :search_val_starts)
+        assert_equal(results.count, 2)
+        assert_equal(results[0], Node.from_json(WOZ_NICK))
+        assert_equal(results[1], Node.from_json(JOBS))
+
+        results = @db.find_nodes({'name': 'Jobs'}, :search_cond_like, :search_val_contains)
+        assert_equal(results.count, 1)
+        assert_equal(results[0], Node.from_json(JOBS))
+
+        results = @db.find_nodes({'type': 'founder'}, :search_cond_like, :search_val_contains)
+        assert_equal(results.count, 3)
+        assert_equal(results[2].body["name"], Node.from_json(WAYNE).body["name"])
+
+        results = @db.find_nodes({'type': 'investor'}, :search_cond_like, :search_val_contains)
+        assert_equal(results.count, 1)
+        assert_equal(results[0].body["name"], Node.from_json(MARKKULA).body["name"])
+
+        results = @db.find_nodes()
+        assert_equal(results.count, 5)
+end
+
+def test_bulk
+    bodies = []
+    nodes = []
+    counter = 0
+    [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each {|nodestr|
+        counter += 1
+        body = _set_id(counter, _from_json(nodestr))
+        bodies.append(_to_json(body))
+        nodes.append(counter)
+      }
+    #puts bodies
+    results = @db.add_nodes(bodies, nodes)
+    results = @db.find_nodes()
+    assert_equal(results.count, 5)
+
+end
+
 #     # def test_flunk
 #     #     flunk "You shall not pass"
 #     # end

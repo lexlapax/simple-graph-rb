@@ -40,17 +40,18 @@ end
 class Datastore
     attr_accessor :db_file
 
-    def initialize(db_file= "graph.db")
+    def initialize(db_file: "graph.db", debug: false)
         @db_file = db_file
         @test_counter = 0
+        @debug = debug
         return atomic(@db_file,GRAPH_SCHEMA,batch: true)
     end
 
-    def atomic(db_file, statement, bind_vars: [], batch: false, debug: false)
+    def atomic(db_file, statement, bind_vars: [], batch: false)
         db = nil
         ret = nil
         @test_counter += 1
-        @debug = false
+        #@debug = debug
         # puts "counter: #{@test_counter}, #{statement}, #{bind_vars}"
         begin
             db = SQLite3::Database.open(db_file)
@@ -78,12 +79,6 @@ class Datastore
         return ret
     end
 
-  
-    def add_node(body, id)
-        data = _from_json(body)
-        return atomic(@db_file, INSERT_NODE, bind_vars: [_to_json(_set_id(id, data))])
-    end
-
     def find_node(id)
         result = atomic(@db_file, SEARCH_NODE_ID, bind_vars: [id.to_s])
         if result == nil or result.empty?
@@ -92,20 +87,7 @@ class Datastore
             return Node.new(_from_json(result[0]["body"]), id)
         end
     end
-
-    def upsert_node(body, id)
-        node = find_node(id)
-
-        if node == nil or node.empty? or node == {}
-            ret =  add_node(body, id)
-        else
-            data = _from_json(body)
-            data.delete("id")
-            ret = atomic(@db_file, UPDATE_NODE, bind_vars: [_to_json(node.body.merge(data)),id])
-        end
-
-    end
-
+ 
     def find_nodes(props={}, where_fn=:search_cond_equals, search_fn=:search_val_equals)
         if props == nil or props == {} 
             return atomic(@db_file, SEARCH_NODE.chomp(" WHERE "))
@@ -118,6 +100,23 @@ class Datastore
         #return result#.map {|nodestr| Node.from_json(nodestr["body"])}
     end
 
+    def add_node(body, id)
+        data = _from_json(body)
+        return atomic(@db_file, INSERT_NODE, bind_vars: [_to_json(_set_id(id, data))])
+    end
+
+    def upsert_node(body, id)
+        node = find_node(id)
+
+        if node == nil or node.empty? or node == {}
+            ret =  add_node(body, id)
+        else
+            data = _from_json(body)
+            data.delete("id")
+            ret = atomic(@db_file, UPDATE_NODE, bind_vars: [_to_json(node.body.merge(data)),id])
+        end
+    end
+
     def _add_nodes_prep_sql(bodies)
         sqls = bodies.map { |bodystr|
             sqlstr = INSERT_NODE.sub(/\?/, "'#{bodystr}'") 
@@ -128,6 +127,49 @@ class Datastore
     def add_nodes(bodies, ids)
         #_add_nodes_prep_sql(bodies)
         return atomic(@db_file, _add_nodes_prep_sql(bodies), batch: true)
+    end
+
+    def upsert_nodes(bodies, ids)
+        for i in 0..ids.length-1
+            upsert_node(bodies[i],ids[i])
+        end
+        return nil
+    end
+
+    def connect_nodes(source_id, target_id, props={})
+        return atomic(@db_file, INSERT_EDGE, bind_vars: [source_id, target_id, _to_json(props)])
+    end
+
+    def _connect_many_nodes_prep_sql(sources, targets, props)
+        sqls = ""
+        [sources, targets, props].transpose.each {|src, tgt, label|
+            sqls = sqls+ INSERT_EDGE.sub(/\?/, "#{src}").sub(/\?/,"#{tgt}").sub(/\?/,"'#{_to_json(label)}'")+";\n"
+        }
+        return sqls
+    end
+    
+    def connect_many_nodes(sources, targets, props)
+        return atomic(@db_file, _connect_many_nodes_prep_sql(sources, targets, props), batch: true)
+    end
+
+    def remove_node(id)
+        atomic(@db_file, DELETE_EDGE_SQL, bind_vars: [id, id])
+        atomic(@db_file, DELETE_NODE, bind_vars: [id])
+    end
+
+    def _remove_many_prep_sql(ids)
+        sql_edge = ""
+        sql_node = ""
+        ids.each {|id|
+            sql_edge = sql_edge + DELETE_EDGE_SQL.sub(/\?/,"#{id}").sub(/\?/,"#{id}") + ";\n"
+            sql_node = sql_node + DELETE_NODE.sub(/\?/,"#{id}") +";\n"
+        }
+        return sql_edge + sql_node
+    end
+    
+
+    def remove_nodes(ids)
+        return atomic(@db_file, _remove_many_prep_sql(ids), batch: true)
     end
 end
 

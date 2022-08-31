@@ -13,6 +13,14 @@ FOUNDED     = '{"action":"founded"}'
 INVESTED    = '{"action":"invested","equity":80000,"debt":170000}'
 DIVESTED    = '{"action":"divested","amount":800,"date":"April 12, 1976"}'
 
+EDGES = [[1, 4, DIVESTED],
+        [2, 1, FOUNDED],
+        [2, 3, '{}'],
+        [3, 1, FOUNDED],
+        [4, 1, FOUNDED],
+        [5, 1, INVESTED]]
+
+
 DB_FILE = "graph_test.db"
 
 def sqlite_query dbfile, query 
@@ -39,10 +47,10 @@ class DatastoreTest < Minitest::Test
     @@setup_complete = false
     @@tests_run = 0
     @db = nil
-    def setup(db_file="graph_test.db")
+    def setup(db_file: "graph_test.db")
         @db_file = db_file
         @@tests_run+=1
-        @db = Datastore.new(@db_file)
+        @db = Datastore.new(db_file: @db_file, debug: false)
         if(!@@setup_complete)
             @@setup_complete = true
         end
@@ -58,8 +66,21 @@ class DatastoreTest < Minitest::Test
         assert_path_exists(@db_file)# File.stat(@db_file).writable? 
     end
     
+    def test_initialize
+        assert_equal(0, sqlite_query(@db_file, 'SELECT * from nodes').count)
+        [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each_with_index {|nodestr,idx| @db.add_node(nodestr, idx+1)}
+        assert_equal(5, sqlite_query(@db_file, 'SELECT * from nodes').count)
+
+        assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
+        EDGES.each {|edge|
+            @db.connect_nodes(edge[0],edge[1],edge[2])
+        }
+        assert_equal(6, sqlite_query(@db_file, 'SELECT * from edges').count)
+    end
+
     def test_initialize_crud
         #add_node
+        assert_equal(0, sqlite_query(@db_file, 'SELECT * from nodes').count)
         @db.add_node(APPLE, 1)
         results = sqlite_query(@db_file, 'SELECT * from nodes where id = "1"')
         assert_equal(1, results.count, "added 1 node expected 1 in return")
@@ -129,6 +150,32 @@ class DatastoreTest < Minitest::Test
 
         results = @db.find_nodes()
         assert_equal(results.count, 5)
+
+        #delete node
+        results = @db.find_node(5)
+        assert_equal(results.body["name"], Node.from_json(MARKKULA).body["name"])
+        @db.remove_node(5)
+        results = @db.find_node(5)
+        assert_equal({}, results)
+        @db.add_node(MARKKULA, 5)
+        results = @db.find_node(5)
+        assert_equal(results.body["name"], Node.from_json(MARKKULA).body["name"])
+        assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
+
+        EDGES.each {|edge|
+            @db.connect_nodes(edge[0],edge[1],edge[2])
+        }
+        assert_equal(6, sqlite_query(@db_file, 'SELECT * from edges').count)
+        @db.remove_node(5)
+        assert_equal(5, sqlite_query(@db_file, 'SELECT * from edges').count)
+
+        @db.remove_node(1)
+        assert_equal(3, sqlite_query(@db_file, 'SELECT * from nodes').count)
+        assert_equal(1, sqlite_query(@db_file, 'SELECT * from edges').count)
+end
+
+def test_edges
+
 end
 
 def test_bulk
@@ -140,11 +187,26 @@ def test_bulk
         body = _set_id(counter, _from_json(nodestr))
         bodies.append(_to_json(body))
         nodes.append(counter)
-      }
+    }
     #puts bodies
+    find_results = @db.find_nodes()
+    assert_equal(find_results.count, 0)
     results = @db.add_nodes(bodies, nodes)
+    find_results = @db.find_nodes()
+    assert_equal(find_results.count, 5)
+    
+    results = @db.upsert_nodes(bodies, nodes)
     results = @db.find_nodes()
-    assert_equal(results.count, 5)
+    assert_equal(find_results, results)
+
+    assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
+    tp_edges = EDGES.transpose
+    results = @db.connect_many_nodes(tp_edges[0],tp_edges[1],tp_edges[2])
+    assert_equal(6, sqlite_query(@db_file, 'SELECT * from edges').count)
+
+    results = @db.remove_nodes(nodes)
+    assert_equal(0, @db.find_nodes().count)
+    assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
 
 end
 

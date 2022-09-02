@@ -63,10 +63,12 @@ class DatastoreTest < Minitest::Test
         # end
     end
     def test_sqldbfile
+        skip
         assert_path_exists(@db_file)# File.stat(@db_file).writable? 
     end
     
     def test_initialize
+        skip
         assert_equal(0, sqlite_query(@db_file, 'SELECT * from nodes').count)
         [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each_with_index {|nodestr,idx| @db.add_node(nodestr, idx+1)}
         assert_equal(5, sqlite_query(@db_file, 'SELECT * from nodes').count)
@@ -79,6 +81,7 @@ class DatastoreTest < Minitest::Test
     end
 
     def test_initialize_crud
+        skip
         #add_node
         assert_equal(0, sqlite_query(@db_file, 'SELECT * from nodes').count)
         @db.add_node(APPLE, 1)
@@ -172,43 +175,58 @@ class DatastoreTest < Minitest::Test
         @db.remove_node(1)
         assert_equal(3, sqlite_query(@db_file, 'SELECT * from nodes').count)
         assert_equal(1, sqlite_query(@db_file, 'SELECT * from edges').count)
-end
+    end
 
-def test_edges
+    def test_bulk
+        skip
+        bodies = []
+        nodes = []
+        counter = 0
+        [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each {|nodestr|
+            counter += 1
+            body = _set_id(counter, _from_json(nodestr))
+            bodies.append(_to_json(body))
+            nodes.append(counter)
+        }
+        #puts bodies
+        find_results = @db.find_nodes()
+        assert_equal(find_results.count, 0)
+        results = @db.add_nodes(bodies, nodes)
+        find_results = @db.find_nodes()
+        assert_equal(find_results.count, 5)
+        
+        results = @db.upsert_nodes(bodies, nodes)
+        results = @db.find_nodes()
+        assert_equal(find_results, results)
 
-end
+        assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
+        tp_edges = EDGES.transpose
+        results = @db.connect_many_nodes(tp_edges[0],tp_edges[1],tp_edges[2])
+        assert_equal(6, sqlite_query(@db_file, 'SELECT * from edges').count)
 
-def test_bulk
-    bodies = []
-    nodes = []
-    counter = 0
-    [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each {|nodestr|
-        counter += 1
-        body = _set_id(counter, _from_json(nodestr))
-        bodies.append(_to_json(body))
-        nodes.append(counter)
-    }
-    #puts bodies
-    find_results = @db.find_nodes()
-    assert_equal(find_results.count, 0)
-    results = @db.add_nodes(bodies, nodes)
-    find_results = @db.find_nodes()
-    assert_equal(find_results.count, 5)
-    
-    results = @db.upsert_nodes(bodies, nodes)
-    results = @db.find_nodes()
-    assert_equal(find_results, results)
+        results = @db.remove_nodes(nodes)
+        assert_equal(0, @db.find_nodes().count)
+        assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
 
-    assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
-    tp_edges = EDGES.transpose
-    results = @db.connect_many_nodes(tp_edges[0],tp_edges[1],tp_edges[2])
-    assert_equal(6, sqlite_query(@db_file, 'SELECT * from edges').count)
+    end
 
-    results = @db.remove_nodes(nodes)
-    assert_equal(0, @db.find_nodes().count)
-    assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
+    # test traversal and finding
+    def test_traversal
+        assert_equal(0, sqlite_query(@db_file, 'SELECT * from nodes').count)
+        # [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each_with_index {|nodestr,idx| @db.add_node(nodestr, idx+1)}
+        [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each_with_index {|nodestr,idx| new_add_node(@db_file, nodestr, idx+1)}
+        assert_equal(5, sqlite_query(@db_file, 'SELECT * from nodes').count)
 
-end
+        # assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
+        # EDGES.each {|edge|
+        #     @db.connect_nodes(edge[0],edge[1],edge[2])
+        # }
+        # assert_equal(6, sqlite_query(@db_file, 'SELECT * from edges').count)
+
+        # assert_equal(@db.traverse(2, 3), [2, 1, 3])
+
+    end
+
 
 #     # def test_flunk
 #     #     flunk "You shall not pass"

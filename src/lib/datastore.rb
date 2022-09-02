@@ -18,6 +18,17 @@ def _set_id(id, data)
     return data
 end
 
+#generic functions for traversal sql statements
+def find_neighbors(with_body=false)
+    if with_body then TRAVERSE_BODIES else TRAVERSE end
+end
+def find_outbound_neighbors(with_body=false)
+    if with_body then TRAVERSE_BODIES_OB else TRAVERSE_OB end
+end
+def find_inbound_neighbors(with_body=false)
+    if with_body then TRAVERSE_BODIES_IB else TRAVERSE_IB end
+end
+
 #generic functions for generating sql "=", like statements
 def search_cond_equals(props, predicate="=")
     props.map{|key, value|
@@ -87,18 +98,6 @@ class Datastore
             return Node.new(_from_json(result[0]["body"]), id)
         end
     end
- 
-    def find_nodes(props={}, where_fn=:search_cond_equals, search_fn=:search_val_equals)
-        if props == nil or props == {} 
-            return atomic(@db_file, SEARCH_NODE.chomp(" WHERE "))
-        else
-            return atomic(@db_file, SEARCH_NODE + send(where_fn, props), bind_vars: send(search_fn, props)).map { |row|
-                Node.from_json(row["body"])
-            }
-        end
-
-        #return result#.map {|nodestr| Node.from_json(nodestr["body"])}
-    end
 
     def add_node(body, id)
         data = _from_json(body)
@@ -166,10 +165,31 @@ class Datastore
         }
         return sql_edge + sql_node
     end
-    
-
+ 
     def remove_nodes(ids)
         return atomic(@db_file, _remove_many_prep_sql(ids), batch: true)
+    end
+
+    def find_nodes(props={}, where_fn=:search_cond_equals, search_fn=:search_val_equals)
+        if props == nil or props == {} 
+            return atomic(@db_file, SEARCH_NODE.chomp(" WHERE "))
+        else
+            return atomic(@db_file, SEARCH_NODE + send(where_fn, props), bind_vars: send(search_fn, props)).map { |row|
+                Node.from_json(row["body"])
+            }
+        end
+
+        #return result#.map {|nodestr| Node.from_json(nodestr["body"])}
+    end
+
+    def traverse(src, tgt=nil, neighbors_fn=:find_neighbors)
+        # path = []
+        # target = _to_json(tgt)
+        # atomic(@db_file, send(neighbors_fn), {'source': src }).each {|row|
+        #     id = row[0]
+        #     path.append(id) if !path.include?(id)
+        # }
+        # if path.include?()}
     end
 end
 
@@ -219,4 +239,25 @@ class Edge
     def to_s
         return "<Edge source: #{@source.id} label: #{@label} target: #{@target.id}>"
     end
+end
+def new_add_node(dbfile, body, id)
+    data = _from_json(body)
+    inner_function = lambda {|mydb|
+        stmt = mydb.prepare(INSERT_NODE)
+        res = stmt.execute(_to_json(_set_id(id, data)))
+        res.close
+        return res
+    }
+    begin
+        db = SQLite3::Database.open(dbfile)
+        db.results_as_hash = true
+        db.execute("PRAGMA foreign_keys = TRUE;")
+        inner_function.call(db)
+    rescue => err
+        puts err
+        raise err
+    ensure
+        db.close if db
+    end
+
 end

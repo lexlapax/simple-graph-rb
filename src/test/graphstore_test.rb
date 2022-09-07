@@ -1,6 +1,7 @@
 require 'minitest/autorun'
 require 'sqlite3'
 require_relative '../lib/graphstore'
+# require_relative 
 
 APPLE       = '{"name":"Apple Computer Company","type":["company","start-up"],"founded":"April 1, 1976","id":"1"}'
 WOZ         = '{"id":"2","name":"Steve Wozniak","type":["person","engineer","founder"]}'
@@ -62,9 +63,69 @@ class GraphStoreTest < Minitest::Test
 
         assert_equal(0, sqlite_query(@dbfile, 'SELECT * from edges').count)
         EDGES.each {|edge|
-            puts "\nsource: #{edge[0]}, target:#{edge[1]}, props:#{edge[2]}}"
-            GraphStore.connect_nodes(edge[0],edge[1],edge[2])
+            GraphStore.connect_nodes(@dbfile, edge[0],edge[1],edge[2])
         }
-        # assert_equal(6, sqlite_query(@dbfile, 'SELECT * from edges').count)
+        assert_equal(6, sqlite_query(@dbfile, 'SELECT * from edges').count)
+    end
+
+    def test_find
+        assert_equal({}, GraphStore.find_node(@dbfile, 1))
+        GraphStore.add_node(@dbfile, APPLE, 1)
+        GraphStore.add_node(@dbfile, WOZ, 2)
+        GraphStore.add_node(@dbfile, JOBS, 3)
+        GraphStore.add_node(@dbfile, WAYNE, 4)
+        GraphStore.add_node(@dbfile, MARKKULA, 5)
+        assert_equal(parse_json(APPLE), GraphStore.find_node(@dbfile, 1))
+        assert_equal(parse_json(WOZ), GraphStore.find_node(@dbfile, 2))
+        assert_equal(parse_json(JOBS), GraphStore.find_node(@dbfile, 3))
+        assert_equal(parse_json(WAYNE)["name"], GraphStore.find_node(@dbfile, 4)["name"])
+        assert_equal(parse_json(MARKKULA)["name"], GraphStore.find_node(@dbfile, 5)["name"])
+
+
+        assert_raises(Exception, "this should have raised exception") {  GraphStore.add_node(@dbfile, APPLE, 1) }
+        assert_equal({}, GraphStore.find_node(@dbfile, 6))
+
+        # #upsert node
+        # @db.upsert_node(APPLE, 1)
+        # results = @db.find_node(1)
+        # assert_equal(results.body,JSON.parse(APPLE))
+
+        # # puts @db.find_node(2)
+        # @db.upsert_node(WOZ_NICK, 2)
+        # results = @db.find_node(2)
+        # assert_equal(results.body, JSON.parse(WOZ_NICK))
+
+        # #find_nodes
+        # results = @db.find_nodes({'name': 'Steve'}, :search_cond_like, :search_val_starts)
+        # assert_equal(results.count, 2)
+        # assert_equal(results[0], Node.from_json(WOZ_NICK))
+        # assert_equal(results[1], Node.from_json(JOBS))
+
+        # results = @db.find_nodes({'name': 'Jobs'}, :search_cond_like, :search_val_contains)
+        # assert_equal(results.count, 1)
+        # assert_equal(results[0], Node.from_json(JOBS))
+
+        # results = @db.find_nodes({'type': 'founder'}, :search_cond_like, :search_val_contains)
+        # assert_equal(results.count, 3)
+        # assert_equal(results[2].body["name"], Node.from_json(WAYNE).body["name"])
+
+        # results = @db.find_nodes({'type': 'investor'}, :search_cond_like, :search_val_contains)
+        # assert_equal(results.count, 1)
+        # assert_equal(results[0].body["name"], Node.from_json(MARKKULA).body["name"])
+
+        # results = @db.find_nodes()
+        # assert_equal(results.count, 5)
+
+        # #delete node
+        # results = @db.find_node(5)
+        # assert_equal(results.body["name"], Node.from_json(MARKKULA).body["name"])
+        # @db.remove_node(5)
+        # results = @db.find_node(5)
+        # assert_equal({}, results)
+        # @db.add_node(MARKKULA, 5)
+        # results = @db.find_node(5)
+        # assert_equal(results.body["name"], Node.from_json(MARKKULA).body["name"])
+        # assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
+
     end
 end

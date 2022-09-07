@@ -7,22 +7,22 @@ module GraphStore
     module_function 
 
     #generic functions for generating sql "=", like statements
-    def search_cond_equals(props, predicate="=")
+    def sql_where_equals(props, predicate="=")
         props.map{|key, value|
             "json_extract(body, '$.#{key}') #{predicate} ?"
         }.join(" AND ")
     end
 
-    def search_cond_like(props)
-        return search_cond_equals(props, 'LIKE')
+    def sql_where_like(props)
+        return sql_where_equals(props, 'LIKE')
     end
-    def search_val_equals(props)
+    def sql_cond_equals(props)
         return props.values
     end
-    def search_val_starts(props)
+    def sql_cond_starts(props)
         return props.values.collect {|val| "#{val}%" }
     end
-    def search_val_contains(props)
+    def sql_cond_contains(props)
         return props.values.collect {|val| "%#{val}%" }
     end    
 
@@ -124,7 +124,7 @@ module GraphStore
     end
 
 
-    def find_nodes(dbfile,props={}, where_fn=:search_cond_equals, search_fn=:search_val_equals, debug:false)
+    def find_nodes(dbfile,props={}, where_fn=:sql_where_equals, search_fn=:sql_cond_equals, debug:false)
         _inner_function = lambda {|sqldb|
             res = []
             if props == nil or props == {} 
@@ -166,6 +166,52 @@ module GraphStore
             upsert_node(dbfile, bodies[i],ids[i], debug: debug)
         end
         return nil
+    end
+
+    def find_edges(dbfile, source:nil, target:nil, debug: false)
+        _inner_function = lambda {|sqldb|
+            res = []
+            case [source, target]
+            in [nil, nil]
+                # sqls = SEARCH_EDGE_IB.chomp(" WHERE source = ?")
+                res = sqldb.execute(SEARCH_EDGE_IB.chomp(" WHERE source = ?"))
+            in [nil, x]
+                # sqls = "#{SEARCH_EDGE_OB} target=#{x}" 
+                res = sqldb.execute(SEARCH_EDGE_OB, [target])
+            in [x, nil]
+                # sqls = "#{SEARCH_EDGE_IB} source=#{x}" 
+                res = sqldb.execute(SEARCH_EDGE_IB, [source])
+            else
+                # sqls = "#{SEARCH_EDGES} source=#{source} target=#{target}"
+                res = sqldb.execute(SEARCH_EDGES, [source, target])
+            end
+            return res
+        }
+        return _atomic(dbfile, _inner_function, debug: debug)
+    end
+
+    def connect_many_nodes(dbfile, sources, targets, props, debug:false)
+        _inner_function = lambda {|sqldb|
+            sqls = ""
+            [sources, targets, props].transpose.each {|src, tgt, label|
+                sqls = sqls+ INSERT_EDGE.sub(/\?/, "#{src}").sub(/\?/,"#{tgt}").sub(/\?/,"'#{create_json(label)}'")+";\n"
+                }
+            sqldb.execute_batch(sqls)
+            }
+            return _atomic(dbfile, _inner_function, debug: debug)
+    end
+
+    def remove_nodes(dbfile, ids, debug:false)
+        _inner_function = lambda {|sqldb|
+            sql_edge = ""
+            sql_node = ""
+            ids.each {|id|
+                sql_edge = sql_edge + DELETE_EDGE_SQL.sub(/\?/,"#{id}").sub(/\?/,"#{id}") + ";\n"
+                sql_node = sql_node + DELETE_NODE.sub(/\?/,"#{id}") +";\n"
+            }
+            sqldb.execute_batch( sql_edge + sql_node)
+        }
+        return _atomic(dbfile, _inner_function, debug: debug)
     end
 
 end 

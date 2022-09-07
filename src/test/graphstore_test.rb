@@ -93,20 +93,20 @@ class GraphStoreTest < Minitest::Test
         assert_equal(parse_json(WOZ_NICK), GraphStore.find_node(@dbfile, 2))
 
         #find_nodes
-        results = GraphStore.find_nodes(@dbfile, {'name': 'Steve'}, :search_cond_like, :search_val_starts)
+        results = GraphStore.find_nodes(@dbfile, {'name': 'Steve'}, :sql_where_like, :sql_cond_starts)
         assert_equal(results.count, 2)
         assert_equal(parse_json(WOZ_NICK), results[0])
         assert_equal(parse_json(JOBS), results[1])
 
-        results =GraphStore.find_nodes(@dbfile, {'name': 'Jobs'}, :search_cond_like, :search_val_contains)
+        results =GraphStore.find_nodes(@dbfile, {'name': 'Jobs'}, :sql_where_like, :sql_cond_contains)
         assert_equal(results.count, 1)
         assert_equal(parse_json(JOBS), results[0])
 
-        results =GraphStore.find_nodes(@dbfile, {'type': 'founder'}, :search_cond_like, :search_val_contains)
+        results =GraphStore.find_nodes(@dbfile, {'type': 'founder'}, :sql_where_like, :sql_cond_contains)
         assert_equal(results.count, 3)
         assert_equal(results[2]["name"], parse_json(WAYNE)["name"])
 
-        results =GraphStore.find_nodes(@dbfile, {'type': 'investor'}, :search_cond_like, :search_val_contains)
+        results =GraphStore.find_nodes(@dbfile, {'type': 'investor'}, :sql_where_like, :sql_cond_contains)
         assert_equal(results.count, 1)
         assert_equal(results[0]["name"], parse_json(MARKKULA)["name"])
 
@@ -148,14 +148,18 @@ class GraphStoreTest < Minitest::Test
         results = GraphStore.find_nodes(@dbfile)
         assert_equal(find_results, results)
 
-        # assert_equal(0, sqlite_query(@dbfile, 'SELECT * from edges').count)
-        # tp_edges = EDGES.transpose
-        # results = @db.connect_many_nodes(tp_edges[0],tp_edges[1],tp_edges[2])
-        # assert_equal(6, sqlite_query(@dbile, 'SELECT * from edges').count)
+        # puts GraphStore.find_edges(@dbfile)
+        # puts GraphStore.find_edges(@dbfile, source:1)
+        # puts GraphStore.find_edges(@dbfile, target:2)
+        # puts GraphStore.find_edges(@dbfile, source:1, target:2)
+        assert_equal([], GraphStore.find_edges(@dbfile))
+        tp_edges = EDGES.transpose
+        GraphStore.connect_many_nodes(@dbfile,tp_edges[0],tp_edges[1],tp_edges[2])
+        assert_equal(6, GraphStore.find_edges(@dbfile).count)
 
-        # results = @db.remove_nodes(node_ids)
-        # assert_equal(0, GrpahStore.find_nodes(@dbfile, ).count)
-        # assert_equal(0, sqlite_query(@dbile, 'SELECT * from edges').count)
+        GraphStore.remove_nodes(@dbfile, node_ids)
+        assert_equal(0, GraphStore.find_nodes(@dbfile).count)
+        assert_equal(0, GraphStore.find_edges(@dbfile).count)
 
     end
 end

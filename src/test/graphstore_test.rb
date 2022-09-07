@@ -85,15 +85,13 @@ class GraphStoreTest < Minitest::Test
         assert_raises(Exception, "this should have raised exception") {  GraphStore.add_node(@dbfile, APPLE, 1) }
         assert_equal({}, GraphStore.find_node(@dbfile, 6))
 
-        # #upsert node
-        # @db.upsert_node(APPLE, 1)
-        # results = @db.find_node(1)
-        # assert_equal(results.body,JSON.parse(APPLE))
+        #upsert node
+        GraphStore.upsert_node(@dbfile, APPLE, 1)
+        assert_equal(parse_json(APPLE), GraphStore.find_node(@dbfile, 1))
 
         # # puts @db.find_node(2)
-        # @db.upsert_node(WOZ_NICK, 2)
-        # results = @db.find_node(2)
-        # assert_equal(results.body, JSON.parse(WOZ_NICK))
+        GraphStore.upsert_node(@dbfile, WOZ_NICK, 2)
+        assert_equal(parse_json(WOZ_NICK), GraphStore.find_node(@dbfile, 2))
 
         # #find_nodes
         # results = @db.find_nodes({'name': 'Steve'}, :search_cond_like, :search_val_starts)

@@ -55,6 +55,23 @@ module GraphStore
         return _atomic(dbfile, _inner_function, debug:debug)
     end
 
+    def upsert_node(dbfile, body, id, debug: false)
+        node = find_node(dbfile, id, debug: debug)
+        _inner_function = lambda {|sqldb|
+            res = []
+            res = sqldb.execute(UPDATE_NODE, [create_json(node), id])
+            return res
+        }
+        if node == nil or node.empty? or node == {}
+            return add_node(body, id)
+        else
+            data = parse_json(body)
+            data.delete("id")
+            node = node.merge(data)
+            return _atomic(dbfile, _inner_function, debug:debug)
+        end
+    end
+
     def _set_id(id, data)
         unless data.key?(:id) || data.key?("id")
             data["id"] = id.to_s 

@@ -6,6 +6,26 @@ module GraphStore
 
     module_function 
 
+    #generic functions for generating sql "=", like statements
+    def search_cond_equals(props, predicate="=")
+        props.map{|key, value|
+            "json_extract(body, '$.#{key}') #{predicate} ?"
+        }.join(" AND ")
+    end
+
+    def search_cond_like(props)
+        return search_cond_equals(props, 'LIKE')
+    end
+    def search_val_equals(props)
+        return props.values
+    end
+    def search_val_starts(props)
+        return props.values.collect {|val| "#{val}%" }
+    end
+    def search_val_contains(props)
+        return props.values.collect {|val| "%#{val}%" }
+    end    
+
     def _atomic(dbfile, fn, debug:false)
         ret = nil
         # debug = true
@@ -103,13 +123,50 @@ module GraphStore
         return _atomic(dbfile, _inner_function, debug:debug)
     end
 
-    # def find_node(id)
-    #     result = atomic(@db_file, SEARCH_NODE_ID, bind_vars: [id.to_s])
-    #     if result == nil or result.empty?
-    #         return {}
-    #     else 
-    #         return Node.new(_from_json(result[0]["body"]), id)
-    #     end
-    # end
+
+    def find_nodes(dbfile,props={}, where_fn=:search_cond_equals, search_fn=:search_val_equals, debug:false)
+        _inner_function = lambda {|sqldb|
+            res = []
+            if props == nil or props == {} 
+                # find everythin
+                rows=sqldb.execute(SEARCH_NODE.chomp(" WHERE "))
+            else
+                rows=sqldb.execute(SEARCH_NODE + send(where_fn, props), send(search_fn, props))
+            end
+            rows.map { |row|
+                    res.append(parse_json(row["body"]))
+            }
+            return res
+        }
+       return _atomic(dbfile, _inner_function, debug:debug)
+    end
+
+    def remove_node(dbfile, id, debug:false)
+        _inner_function = lambda {|sqldb|
+            sqldb.execute(DELETE_EDGE_SQL, [id, id])
+            sqldb.execute(DELETE_NODE, [id])
+        }
+        _atomic(dbfile, _inner_function, debug:debug)
+    end
+
+    def add_nodes(dbfile, bodies, ids, debug: false)
+        _inner_function = lambda {|sqldb|
+            sqls = bodies.map { |bodystr|
+                sqlstr = INSERT_NODE.sub(/\?/, "'#{create_json(bodystr)}'") 
+            }.join(";\n")
+            sqls += "\n;"
+            sqldb.execute_batch(sqls)
+        }
+        #_add_nodes_prep_sql(bodies)
+        return _atomic(dbfile, _inner_function, debug: debug)
+    end
+
+    def upsert_nodes(dbfile, bodies, ids, debug: false)
+        for i in 0..ids.length-1
+            upsert_node(dbfile, bodies[i],ids[i], debug: debug)
+        end
+        return nil
+    end
+
 end 
 

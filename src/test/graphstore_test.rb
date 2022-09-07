@@ -51,7 +51,7 @@ class GraphStoreTest < Minitest::Test
         File.delete @dbfile
     end
     def test_sqldbfile
-        assert_path_exists(@dbfile)# File.stat(@db_file).writable? 
+        assert_path_exists(@dbfile)
     end
     
     def test_initialize
@@ -68,7 +68,7 @@ class GraphStoreTest < Minitest::Test
         assert_equal(6, sqlite_query(@dbfile, 'SELECT * from edges').count)
     end
 
-    def test_find
+    def test_find_add_remove
         assert_equal({}, GraphStore.find_node(@dbfile, 1))
         GraphStore.add_node(@dbfile, APPLE, 1)
         GraphStore.add_node(@dbfile, WOZ, 2)
@@ -88,42 +88,74 @@ class GraphStoreTest < Minitest::Test
         #upsert node
         GraphStore.upsert_node(@dbfile, APPLE, 1)
         assert_equal(parse_json(APPLE), GraphStore.find_node(@dbfile, 1))
-
         # # puts @db.find_node(2)
         GraphStore.upsert_node(@dbfile, WOZ_NICK, 2)
         assert_equal(parse_json(WOZ_NICK), GraphStore.find_node(@dbfile, 2))
 
-        # #find_nodes
-        # results = @db.find_nodes({'name': 'Steve'}, :search_cond_like, :search_val_starts)
-        # assert_equal(results.count, 2)
-        # assert_equal(results[0], Node.from_json(WOZ_NICK))
-        # assert_equal(results[1], Node.from_json(JOBS))
+        #find_nodes
+        results = GraphStore.find_nodes(@dbfile, {'name': 'Steve'}, :search_cond_like, :search_val_starts)
+        assert_equal(results.count, 2)
+        assert_equal(parse_json(WOZ_NICK), results[0])
+        assert_equal(parse_json(JOBS), results[1])
 
-        # results = @db.find_nodes({'name': 'Jobs'}, :search_cond_like, :search_val_contains)
-        # assert_equal(results.count, 1)
-        # assert_equal(results[0], Node.from_json(JOBS))
+        results =GraphStore.find_nodes(@dbfile, {'name': 'Jobs'}, :search_cond_like, :search_val_contains)
+        assert_equal(results.count, 1)
+        assert_equal(parse_json(JOBS), results[0])
 
-        # results = @db.find_nodes({'type': 'founder'}, :search_cond_like, :search_val_contains)
-        # assert_equal(results.count, 3)
-        # assert_equal(results[2].body["name"], Node.from_json(WAYNE).body["name"])
+        results =GraphStore.find_nodes(@dbfile, {'type': 'founder'}, :search_cond_like, :search_val_contains)
+        assert_equal(results.count, 3)
+        assert_equal(results[2]["name"], parse_json(WAYNE)["name"])
 
-        # results = @db.find_nodes({'type': 'investor'}, :search_cond_like, :search_val_contains)
-        # assert_equal(results.count, 1)
-        # assert_equal(results[0].body["name"], Node.from_json(MARKKULA).body["name"])
+        results =GraphStore.find_nodes(@dbfile, {'type': 'investor'}, :search_cond_like, :search_val_contains)
+        assert_equal(results.count, 1)
+        assert_equal(results[0]["name"], parse_json(MARKKULA)["name"])
 
-        # results = @db.find_nodes()
-        # assert_equal(results.count, 5)
+        results =GraphStore.find_nodes(@dbfile)
+        assert_equal(results.count, 5)
 
-        # #delete node
-        # results = @db.find_node(5)
-        # assert_equal(results.body["name"], Node.from_json(MARKKULA).body["name"])
-        # @db.remove_node(5)
-        # results = @db.find_node(5)
-        # assert_equal({}, results)
-        # @db.add_node(MARKKULA, 5)
-        # results = @db.find_node(5)
-        # assert_equal(results.body["name"], Node.from_json(MARKKULA).body["name"])
-        # assert_equal(0, sqlite_query(@db_file, 'SELECT * from edges').count)
+        EDGES.each {|edge|
+            GraphStore.connect_nodes(@dbfile, edge[0],edge[1],edge[2])
+        }
+        assert_equal(6, sqlite_query(@dbfile, 'SELECT * from edges').count)
+        GraphStore.remove_node(@dbfile, 5)
+        assert_equal(5, sqlite_query(@dbfile, 'SELECT * from edges').count)
+        assert_equal(4, sqlite_query(@dbfile, 'SELECT * from nodes').count)
+
+        GraphStore.remove_node(@dbfile, 1)
+        assert_equal(1, sqlite_query(@dbfile, 'SELECT * from edges').count)
+        assert_equal(3, sqlite_query(@dbfile, 'SELECT * from nodes').count)
+    end
+
+
+    def test_bulk
+        bodies = []
+        node_ids = []
+        counter = 0
+        [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each {|nodestr|
+            counter += 1
+            body = GraphStore._set_id(counter, parse_json(nodestr))
+            bodies.append(body)
+            node_ids.append(counter)
+        }
+        #puts bodies
+        find_results = GraphStore.find_nodes(@dbfile)
+        assert_equal(0, find_results.count)
+        results = GraphStore.add_nodes(@dbfile, bodies, node_ids)
+        find_results = GraphStore.find_nodes(@dbfile)
+        assert_equal(5, find_results.count)
+  
+        GraphStore.upsert_nodes(@dbfile, bodies, node_ids)
+        results = GraphStore.find_nodes(@dbfile)
+        assert_equal(find_results, results)
+
+        # assert_equal(0, sqlite_query(@dbfile, 'SELECT * from edges').count)
+        # tp_edges = EDGES.transpose
+        # results = @db.connect_many_nodes(tp_edges[0],tp_edges[1],tp_edges[2])
+        # assert_equal(6, sqlite_query(@dbile, 'SELECT * from edges').count)
+
+        # results = @db.remove_nodes(node_ids)
+        # assert_equal(0, GrpahStore.find_nodes(@dbfile, ).count)
+        # assert_equal(0, sqlite_query(@dbile, 'SELECT * from edges').count)
 
     end
 end

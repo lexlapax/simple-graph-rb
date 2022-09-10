@@ -55,6 +55,7 @@ class GraphStoreTest < Minitest::Test
     end
     
     def test_initialize
+        
         assert_equal(0, sqlite_query(@dbfile, 'SELECT * from nodes').count)
         [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each_with_index {|nodestr,idx|
             GraphStore.add_node(@dbfile, nodestr, idx+1, debug:@debug)
@@ -69,6 +70,7 @@ class GraphStoreTest < Minitest::Test
     end
 
     def test_find_add_remove
+        # skip
         assert_equal({}, GraphStore.find_node(@dbfile, 1))
         GraphStore.add_node(@dbfile, APPLE, 1)
         GraphStore.add_node(@dbfile, WOZ, 2)
@@ -128,6 +130,7 @@ class GraphStoreTest < Minitest::Test
 
 
     def test_bulk
+        # skip
         bodies = []
         node_ids = []
         counter = 0
@@ -160,6 +163,70 @@ class GraphStoreTest < Minitest::Test
         GraphStore.remove_nodes(@dbfile, node_ids)
         assert_equal(0, GraphStore.find_nodes(@dbfile).count)
         assert_equal(0, GraphStore.find_edges(@dbfile).count)
+    end
+
+    def test_traversal
+        # skip
+        assert_equal(0, GraphStore.find_nodes(@dbfile).count)
+        [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each_with_index {|nodestr,idx| GraphStore.add_node(@dbfile, nodestr, idx+1)}
+        assert_equal(5, GraphStore.find_nodes(@dbfile).count)
+
+        assert_equal(0, GraphStore.find_edges(@dbfile).count)
+        EDGES.each {|edge|
+            GraphStore.connect_nodes(@dbfile, edge[0],edge[1],edge[2])
+        }
+        assert_equal(6, GraphStore.find_edges(@dbfile).count)
+
+        assert_equal(["2","1","3"], GraphStore.traverse(@dbfile, 2, 3))
+        assert_equal(["4","1","2","3","5"], GraphStore.traverse(@dbfile, 4, 5))
+        assert_equal(["5"], GraphStore.traverse(@dbfile, 5, neighbors_fn:"inbound", debug:false))
+        assert_equal(["5","1","4"], GraphStore.traverse(@dbfile, 5, neighbors_fn:"outbound", debug:false))
+        assert_equal(["5","1","2","3","4"], GraphStore.traverse(@dbfile, 5, debug:false))
+        # neighbors_fn = neighbors is same as no neighbors_fn, default
+        assert_equal(["5","1","2","3","4"], GraphStore.traverse(@dbfile, 5, neighbors_fn:"neighbors", debug:false))
+
+
+
+
+        # assert_equal([2,1,3], GraphStore.traverse(@dbfile, 2, 3, bodies:true))
+
+        # assert_equal([2,1,3], GraphStore.traverse(@dbfile, 2, 3, neighbors_fn=:inbound, bodies:true))
+
+        # assert_equal([2,1,3], GraphStore.traverse(@dbfile, 2, 3, neighbors_fn=:outbound))
+        # assert_equal([2,1,3], GraphStore.traverse(@dbfile, 2, 3, neighbors_fn=:outbound, bodies:true))
 
     end
+
+    def test_traversal_bodies
+        skip
+        [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each_with_index {|nodestr,idx| GraphStore.add_node(@dbfile, nodestr, idx+1)}
+        EDGES.each {|edge|
+            GraphStore.connect_nodes(@dbfile, edge[0],edge[1],edge[2])
+        }
+
+        expected = normalize_body_traversal([['2', '()', '{"name":"Steve Wozniak","type":["person","engineer","founder"],"id":2}'], 
+            ['1', '->', '{"action":"founded"}'], 
+            ['3', '->', '{}'], 
+            ['1', '()', '{"name":"Apple Computer Company","type":["company","start-up"],"founded":"April 1, 1976","id":1}'], 
+            ['2', '<-', '{"action":"founded"}'], 
+            ['3', '<-', '{"action":"founded"}'], 
+            ['4', '<-', '{"action":"founded"}'], 
+            ['5', '<-', '{"action":"invested","equity":80000,"debt":170000}'], 
+            ['4', '->', '{"action":"divested","amount":800,"date":"April 12, 1976"}'], 
+            ['3', '()', '{"name":"Steve Jobs","type":["person","designer","founder"],"id":"3"}']])
+        # expected = normalize_body_traversal([['2', '()', '{"name":"Steve Wozniak","type":["person","engineer","founder"],"id":2}'], 
+        #     ['1', '->', '{"action":"founded"}'], 
+        #     ['3', '->', '{}']])
+        actual = GraphStore.traverse(@dbfile, 2, 3, bodies:true)
+        puts "expected =", expected.count
+        puts "actual = ", actual.count
+        assert_equal(expected, actual)
+
+    end
+    def normalize_body_traversal(results)
+        results.map {|arr|
+            [arr[0], arr[1], parse_json(arr[2])]
+        }
+    end
+
 end

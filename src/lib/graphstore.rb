@@ -50,12 +50,12 @@ module GraphStore
         inner_function = lambda{|sqldb| 
             res = []
             rset = sqldb.execute_batch(GRAPH_SCHEMA)
-            if rset != nil 
-                rset.each{ |somerow|
-                    res.append(somerow)
-                }
-                if !rset.close? then rset.close end
-            end
+            # if rset != nil 
+            #     rset.each{ |somerow|
+            #         res.append(somerow)
+            #     }
+            #     if !rset.close? then rset.close end
+            # end
             return res
         }
         return _atomic(dbfile, inner_function, debug:debug)
@@ -64,7 +64,6 @@ module GraphStore
     def add_node(dbfile, body, id, debug: false)
         data = _set_id(id, parse_json(body))
         _inner_function = lambda {|sqldb|
-            # puts data
             res = []
             sqldb.execute(INSERT_NODE, create_json(data)).each{ |somerow| 
                 res.append(somerow)
@@ -101,7 +100,6 @@ module GraphStore
 
     def connect_nodes(dbfile, source_id, target_id, props={}, debug:false)
         _inner_function = lambda {|sqldb|
-            # puts "source: #{source_id}"
             res = []
             sqldb.execute(INSERT_EDGE, ["#{source_id}", "#{target_id}", create_json(props)]).each {|somerow|
                 res.append(somerow)
@@ -214,5 +212,50 @@ module GraphStore
         return _atomic(dbfile, _inner_function, debug: debug)
     end
 
+    def traverse(dbfile, src, tgt=nil, neighbors_fn:"neighbors", bodies:false, debug:false)
+        _inner_function = lambda{|sqldb|
+            path = []
+            target = create_json(tgt)
+            sql=""
+            case neighbors_fn
+            in "outbound" 
+                if bodies 
+                    sql = TRAVERSE_BODIES_OB
+                else
+                    sql = TRAVERSE_OB
+                end
+            in "inbound"
+                if bodies
+                    sql = TRAVERSE_BODIES_IB
+                else
+                    sql = TRAVERSE_IB
+                end
+            in "neighbors"
+                if bodies
+                    sql = TRAVERSE_BODIES
+                else
+                    sql = TRAVERSE
+                end
+            end
+            sqldb.execute(sql, {'source': create_json(src)}).each {|row|
+                # puts row
+                if bodies
+                    # deconstruct array using pattern matching (ruby3)
+                    row.values => [id, obj, body]
+                    # puts "#{id} #{connector} #{obj}"
+                    path.append([id, obj, parse_json(body)])
+                    if id == target && obj == '()'
+                        break
+                    end
+                else
+                    id = row['id']
+                    path.append(id) if !path.include?(id)
+                    break if id == target
+                end
+            }
+            return path
+        }
+        return _atomic(dbfile, _inner_function, debug: debug)
+    end
 end 
 

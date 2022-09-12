@@ -198,7 +198,7 @@ class GraphStoreTest < Minitest::Test
     end
 
     def test_traversal_bodies
-        skip
+        
         [APPLE, WOZ, JOBS, WAYNE, MARKKULA].each_with_index {|nodestr,idx| GraphStore.add_node(@dbfile, nodestr, idx+1)}
         EDGES.each {|edge|
             GraphStore.connect_nodes(@dbfile, edge[0],edge[1],edge[2])

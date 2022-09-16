@@ -221,8 +221,8 @@ class GraphStoreTest < Minitest::Test
         puts "expected =", expected.count
         puts "actual = ", actual.count
         assert_equal(expected, actual)
-
     end
+
     def normalize_body_traversal(results)
         results.map {|arr|
             [arr[0], arr[1], parse_json(arr[2])]

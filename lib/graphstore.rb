@@ -9,7 +9,7 @@ module GraphStore
     #generic functions for generating sql "=", like statements
     def sql_where_equals(props, predicate="=")
         props.map{|key, value|
-            "json_extract(body, '$.#{key}') #{predicate} ?"
+            " json_extract(body, '$.#{key}') #{predicate} ?"
         }.join(" AND ")
     end
 
@@ -49,7 +49,7 @@ module GraphStore
     def initialize(dbfile="graph.db", debug: false)
         inner_function = lambda{|sqldb| 
             res = []
-            rset = sqldb.execute_batch(GRAPH_SCHEMA)
+            rset = sqldb.execute_batch(SCHEMA)
             # if rset != nil 
             #     rset.each{ |somerow|
             #         res.append(somerow)
@@ -112,7 +112,7 @@ module GraphStore
     def find_node(dbfile, id, debug:false)
         _inner_function = lambda {|sqldb|
             res = {}
-            rs = sqldb.execute(SEARCH_NODE_ID, [id.to_s])
+            rs = sqldb.execute(SEARCH_NODE_BY_ID, [id.to_s])
             if rs!= nil && ! rs.empty? 
                 res = parse_json(rs[0]["body"])
             end
@@ -127,7 +127,7 @@ module GraphStore
             res = []
             if props == nil or props == {} 
                 # find everythin
-                rows=sqldb.execute(SEARCH_NODE.chomp(" WHERE "))
+                rows=sqldb.execute(SEARCH_NODE.chomp("WHERE"))
             else
                 rows=sqldb.execute(SEARCH_NODE + send(where_fn, props), send(search_fn, props))
             end
@@ -141,7 +141,7 @@ module GraphStore
 
     def remove_node(dbfile, id, debug:false)
         _inner_function = lambda {|sqldb|
-            sqldb.execute(DELETE_EDGE_SQL, [id, id])
+            sqldb.execute(DELETE_EDGE, [id, id])
             sqldb.execute(DELETE_NODE, [id])
         }
         _atomic(dbfile, _inner_function, debug:debug)
@@ -172,13 +172,13 @@ module GraphStore
             case [source, target]
             in [nil, nil]
                 # sqls = SEARCH_EDGE_IB.chomp(" WHERE source = ?")
-                res = sqldb.execute(SEARCH_EDGE_IB.chomp(" WHERE source = ?"))
+                res = sqldb.execute(SEARCH_EDGES_INBOUND.chomp(" WHERE source = ?"))
             in [nil, x]
                 # sqls = "#{SEARCH_EDGE_OB} target=#{x}" 
-                res = sqldb.execute(SEARCH_EDGE_OB, [target])
+                res = sqldb.execute(SEARCH_EDGES_OUTBOUND, [target])
             in [x, nil]
                 # sqls = "#{SEARCH_EDGE_IB} source=#{x}" 
-                res = sqldb.execute(SEARCH_EDGE_IB, [source])
+                res = sqldb.execute(SEARCH_EDGES_INBOUND, [source])
             else
                 # sqls = "#{SEARCH_EDGES} source=#{source} target=#{target}"
                 res = sqldb.execute(SEARCH_EDGES, [source, target])
@@ -204,7 +204,7 @@ module GraphStore
             sql_edge = ""
             sql_node = ""
             ids.each {|id|
-                sql_edge = sql_edge + DELETE_EDGE_SQL.sub(/\?/,"#{id}").sub(/\?/,"#{id}") + ";\n"
+                sql_edge = sql_edge + DELETE_EDGE.sub(/\?/,"#{id}").sub(/\?/,"#{id}") + ";\n"
                 sql_node = sql_node + DELETE_NODE.sub(/\?/,"#{id}") +";\n"
             }
             sqldb.execute_batch( sql_edge + sql_node)
@@ -220,19 +220,19 @@ module GraphStore
             case neighbors_fn
             in "outbound" 
                 if bodies 
-                    sql = TRAVERSE_BODIES_OB
+                    sql = TRAVERSE_WITH_BODIES_OUTBOUND
                 else
-                    sql = TRAVERSE_OB
+                    sql = TRAVERSE_OUTBOUND
                 end
             in "inbound"
                 if bodies
-                    sql = TRAVERSE_BODIES_IB
+                    sql = TRAVERSE_WITH_BODIES_INBOUND
                 else
-                    sql = TRAVERSE_IB
+                    sql = TRAVERSE_INBOUND
                 end
             in "neighbors"
                 if bodies
-                    sql = TRAVERSE_BODIES
+                    sql = TRAVERSE_WITH_BODIES
                 else
                     sql = TRAVERSE
                 end

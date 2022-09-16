@@ -12,7 +12,6 @@ GEM
       process-group
     process-terminal (0.2.0)
       ffi
-    rake (13.0.6)
     sqlite3 (1.4.4)
 
 PLATFORMS
@@ -22,7 +21,6 @@ DEPENDENCIES
   graphviz
   json
   minitest
-  rake
   sqlite3
 
 BUNDLED WITH
